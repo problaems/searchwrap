@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "searchwrap"
+version = "0.1.0"
+description = "One search interface over Everything (es), ripgrep, and fff: lane routing, racing, fallback, unified JSON envelope"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "probs"}]
+keywords = ["search", "ripgrep", "everything", "everything-search", "fff", "windows"]
+classifiers = [
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Topic :: Utilities",
+]
+dependencies = [
+  "fff-search>=0.10.6; sys_platform == 'win32' or platform_system != 'Darwin'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+searchwrap = "searchwrap.daemon:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["searchwrap"]
