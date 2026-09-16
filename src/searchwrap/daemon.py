@@ -615,11 +615,22 @@ _MACHINE_NONCE = None
 def _machine_fixture():
     global _MACHINE_NONCE
     if _MACHINE_NONCE is None:
-        import tempfile, uuid
+        import tempfile, uuid, time
         _MACHINE_NONCE = "swx" + uuid.uuid4().hex[:12]
         d = tempfile.mkdtemp(prefix="searchwrap-home-")
         for j in range(3):
             open(os.path.join(d, f"{_MACHINE_NONCE}_file{j}.txt"), "w").write(f"{_MACHINE_NONCE} content\n")
+        # machine-wide lane goes through es (Everything index) - wait until indexed (usually <1s)
+        es = es_path()
+        if es:
+            for _ in range(20):
+                time.sleep(0.25)
+                try:
+                    p = subprocess.run([es, "-n", "1", _MACHINE_NONCE], capture_output=True, text=True, timeout=10, creationflags=0x08000000 if os.name == "nt" else 0)
+                    if p.returncode == 0 and p.stdout.strip():
+                        break
+                except Exception:
+                    break
     return _MACHINE_NONCE
 
 def selftest():
