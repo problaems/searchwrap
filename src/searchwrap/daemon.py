@@ -33,6 +33,8 @@ def es_path():
 def rg_path():
     w = shutil.which("rg")
     if w: return w
+    boot = os.path.join(_BOOT_DIR, "rg.exe")
+    if os.path.exists(boot): return boot
     for c in _RG_CANDIDATES:
         if c and os.path.exists(c): return c
     return "rg"
@@ -318,7 +320,12 @@ def serve():
             srv.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         except (AttributeError, OSError):
             pass
-    srv.bind(("127.0.0.1", PORT)); srv.listen(8)
+    try:
+        srv.bind(("127.0.0.1", PORT))
+    except OSError as e:
+        print(f"searchd fatal: cannot bind 127.0.0.1:{PORT} - {e}. Another searchwrap daemon or other app owns the port; run 'searchwrap stop' or change PORT.", flush=True)
+        raise
+    srv.listen(8)
     print(f"searchd up pid={os.getpid()} fff_import={'pending'}", flush=True)
     try:
         import fff; POOL.available = True
@@ -522,7 +529,7 @@ def send(req, spawn=True):
             time.sleep(0.25)
             try: return send(req, spawn=False)
             except OSError: continue
-        raise RuntimeError("daemon did not start")
+        raise RuntimeError("daemon did not start. Run 'searchwrap status'; if the daemon keeps dying, check SEARCHWRAP_PYTHON points at a python with fff-search installed.")
 
 def main():
     if len(sys.argv) < 2:
@@ -547,10 +554,10 @@ def main():
         try:
             import fff; fff_ok = True; fff_err = None
         except Exception as e:
-            fff = None; fff_ok = False; fff_error = str(e)
+            fff_ok = False; fff_error = str(e)
         print(json.dumps({
             "es": {"found": bool(es), "path": es, "note": "requires Everything service running (GUI app, admin to install)" if os.name == "nt" else "es.exe is Windows-only"},
-            "rg": {"found": bool(shutil.which("rg") or _RG_CANDIDATES[0] and os.path.exists(_RG_CANDIDATES[0])), "path": shutil.which("rg") or (_RG_CANDIDATES[0] if os.path.exists(_RG_CANDIDATES[0]) else None)},
+            "rg": {"found": bool(rg), "path": rg},
             "fff": {"found": fff_ok, "note": None if fff_ok else "pip install fff-search into the daemon's python"},
             "env_overrides": {"SEARCHWRAP_ES": os.environ.get("SEARCHWRAP_ES"), "SEARCHWRAP_RG": os.environ.get("SEARCHWRAP_RG")},
             "missing_ok": True,
@@ -612,6 +619,20 @@ def _tmp_tree():
 
 _MACHINE_NONCE = None
 
+def _cleanup_old_fixtures():
+    import tempfile, glob, shutil
+    try:
+        base = tempfile.gettempdir()
+        keep = _MACHINE_NONCE
+        for d in glob.glob(os.path.join(base, "searchwrap-home-*")) + glob.glob(os.path.join(base, "searchwrap-test-*")) + glob.glob(os.path.join(base, "searchwrap-reg*")) + glob.glob(os.path.join(base, "searchwrap-p7*")) + glob.glob(os.path.join(base, "searchwrap-fff-probe*")):
+            try:
+                if os.path.isdir(d):
+                    shutil.rmtree(d, ignore_errors=True)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
 def _machine_fixture():
     global _MACHINE_NONCE
     if _MACHINE_NONCE is None:
@@ -634,6 +655,7 @@ def _machine_fixture():
     return _MACHINE_NONCE
 
 def selftest():
+    _cleanup_old_fixtures()
     tree, tree_token = _tmp_tree()
     name_q = tree_token.split("_")[1]  # "fixture" - present in 2 fixture filenames
     mnonce = _machine_fixture()

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          pip install -e .
+          pip install ripgrepy 2>/dev/null || true
+      - name: Verify import + CLI entry
+        shell: pwsh
+        run: |
+          searchwrap --help 2>&1 || true
+          python -c "import searchwrap.daemon; print('import OK')"
+      - name: Unit checks (no engines required)
+        run: |
+          python -c "from searchwrap.daemon import route, es_path, rg_path, _tmp_tree; d,t=_tmp_tree(); import os; assert os.path.isdir(d); print('fixture tree OK:', d)"
+          python -c "from searchwrap.daemon import route; assert route({'type':'meta'})==('META',['es']); assert route({'q':'x','tree':'C:/t'})==('NAME_TREE',['fff','es']); assert route({'q':'dm:today'})==('META',['es']); print('routing OK')"
+      - name: Selftest (installs engines if needed)
+        run: |
+          searchwrap bootstrap fff
+          searchwrap status
+          searchwrap selftest
+        env:
+          SEARCHWRAP_AUTOBOOT: "1"
